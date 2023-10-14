@@ -62,5 +62,4 @@ Contributions are welcome! Please read the contributing guidelines to get starte
 
 ## License:
 
-[License name, e.g., MIT, GPL, etc.]
-
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
