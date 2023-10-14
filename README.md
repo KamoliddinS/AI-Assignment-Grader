@@ -38,7 +38,7 @@ nano .env
 ## Usage:
 
 ```bash
-python assignment_grader.py path_to_excel_file.xlsx
+python main.py path_to_excel_file.xlsx
 ```
 
 Replace `path_to_excel_file.xlsx` with the path to your Excel file containing student answers.
@@ -54,6 +54,9 @@ OPEN_AI_API_TYPE=YOUR_API_TYPE
 OPEN_AI_API_VERSION=YOUR_API_VERSION
 OPEN_AI_DEPLOYMENT_ID=YOUR_DEPLOYMENT_ID
 CREDENTIALS_JSON_PATH=YOUR_CREDENTIALS_JSON_PATH
+COURSE_NAME=
+COURSE_CODE=
+PROFESSOR_NAME=
 ```
 
 ## Excel File Structure:

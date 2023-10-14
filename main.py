@@ -34,6 +34,8 @@ OPEN_AI_API_TYPE = os.getenv('OPEN_AI_API_TYPE')
 OPEN_AI_API_VERSION = os.getenv('OPEN_AI_API_VERSION')
 OPEN_AI_DEPLOYMENT_ID = os.getenv('OPEN_AI_DEPLOYMENT_ID')
 GMAIL_API_CREDENTIALS = os.getenv('GMAIL_API_CREDENTIALS')
+COURSE_NAME = os.getenv('COURSE_NAME')
+PROFESSOR_NAME = os.getenv('PROFESSOR_NAME')
 
 deployment_id = OPEN_AI_DEPLOYMENT_ID
 
@@ -50,7 +52,7 @@ def setup_openai_api():
 
 system_config = {
     "role": "system",
-    "content": "You are an AI assistant of Computer Programing with C++ Course, you have to grade the student's homework and give them feedback. grade tem from 0 to 10."
+    "content": f"You are an AI assistant of {COURSE_NAME} Course, you have to grade the student's homework and give them feedback. grade tem from 0 to 10."
 }
 
 user_config = {
@@ -132,7 +134,7 @@ def get_score_feedback(question, answer):
     except Exception as e:
         logging.error(f"Error getting score feedback for question {question} and answer {answer}: {e}")
         raise  
-def generate_pdf(questions, answers, score_feedback, student_id):
+def generate_pdf(questions, answers, score_feedback, student_id, sum_score):
     
     try:
         # Create a PDF document
@@ -144,6 +146,12 @@ def generate_pdf(questions, answers, score_feedback, student_id):
 
         # Define the styles for the text in the PDF
         styles = getSampleStyleSheet()
+        
+         # Add student ID and Total Score at the beginning
+        content.append(Paragraph(f"Student ID: {student_id}", styles["Heading1"]))
+        content.append(Paragraph(f"Total Score: {sum_score}", styles["Heading1"]))
+        content.append(Spacer(1, 24))  # Add some space after the student details
+
 
         # Iterate through the questions, answers, and feedback
         for i, (question, answer, (score, feedback)) in enumerate(zip(questions, answers, score_feedback), start=1):
@@ -168,9 +176,9 @@ def generate_pdf(questions, answers, score_feedback, student_id):
             content.append(Paragraph("Feedback:", styles["Heading3"]))
             content.append(Paragraph(feedback, styles["Normal"]))
 
-            # Add a page break after each question
-            if i < len(questions):
-                content.append(PageBreak())
+            # # Add a page break after each question
+            # if i < len(questions):
+            #     content.append(PageBreak())
         # Build the PDF document
         doc.build(content)
         return pdf_filename
@@ -185,7 +193,7 @@ def send_pdf_email(email_address, pdf_path, service ):
         message['to'] = email_address
         message['subject'] = f'Your, Grades are Ready!'
 
-        msg = MIMEText('Hi, This is Ai Assistant of your teacher Kamoliddin Soliev. Your grades are ready. Please check the attached file. Thank you!')
+        msg = MIMEText(f'Hi, This is Ai Assistant of your {PROFESSOR_NAME}. Your grades are ready. Please check the attached file. Thank you!')
         message.attach(msg)
 
         with open(pdf_path, 'rb') as f:
@@ -257,22 +265,24 @@ def main(file_path):
     file_names = []
     email_addresses = data["Email Address"].values
     score_feedbacks = []
-    for student_id in data["Student Id "].values:
+    for student_id, email_address in zip(data["Student Id "].values, email_addresses):
         try:
             logger.info(f"Processing student_id {student_id}")
-            student_data = data[data["Student Id "] == student_id]
-            answers = student_data[answers_column].values[0]
-            score_feedback = [get_score_feedback(question, answer) for question, answer in zip(questions, answers)]
-            score_feedbacks.append(score_feedback)
-            pdf_filename = generate_pdf(questions, answers, score_feedback, student_id)
-            file_names.append(pdf_filename)
-            logger.info(f"PDF generated for student_id {student_id}")
-        except Exception as e:
-            logging.error(f"Error processing student_id {student_id}: {e}")
-    for email_address, file_name in zip(email_addresses, file_names):
-        try:
-            send_pdf_email(email_address, file_name, service)
-            logger.info(f"Email sent to {email_address}")
+            # check if the student has been processed before by studnet_id in current directory
+            if os.path.exists(f"{student_id}.pdf"):
+                logger.info(f"PDF already generated for student_id {student_id}")
+                logger.info(f"Email is already sent to {email_address}")
+            else:
+                student_data = data[data["Student Id "] == student_id]
+                answers = student_data[answers_column].values[0]
+                score_feedback = [get_score_feedback(question, answer) for question, answer in zip(questions, answers)]
+                score_feedbacks.append(score_feedback)
+                sum_score = sum([score for score, _ in score_feedback])
+                pdf_filename = generate_pdf(questions, answers, score_feedback, student_id, sum_score)
+                file_names.append(pdf_filename)
+                logger.info(f"PDF generated for student_id {student_id}")
+                send_pdf_email(email_address, pdf_filename, service)
+                logger.info(f"Email sent to {email_address}")
         except Exception as e:
             logging.error(f"Error sending email to {email_address}: {e}")
         time.sleep(3)
@@ -286,7 +296,8 @@ def main(file_path):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Grade student assignments using AI.')
     parser.add_argument('file_path', type=str, help='Path to the Excel file with student assignments')
-    
+    parser.add_argument('--log', type=str, help='Path to the log file')
+    parser.add_argument('--time', type=int, help='Time to wait between scoring each question')
     
     args = parser.parse_args()
     main(args.file_path)
