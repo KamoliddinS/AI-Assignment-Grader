@@ -125,7 +125,8 @@ def get_score_feedback(question, answer):
         content = f"Question: {question} Answer: {answer}"
         output = chat_with_gpt(content)
         output = json.loads(output)
-        time.sleep(10)   
+        time.sleep(10)
+        logger.info(f"Score and feedback generated for question {question} and answer {answer}")   
         return output['score'], output['feedback']
     except Exception as e:
         logging.error(f"Error getting score feedback for question {question} and answer {answer}: {e}")
@@ -221,17 +222,19 @@ def main(file_path):
 
     for student_id in data["Student Id "].values:
         try:
+            logger.info(f"Processing student_id {student_id}")
             student_data = data[data["Student Id "] == student_id]
             answers = student_data[answers_column].values[0]
             score_feedback = [get_score_feedback(question, answer) for question, answer in zip(questions, answers)]
             pdf_filename = generate_pdf(questions, answers, score_feedback, student_id)
             file_names.append(pdf_filename)
+            logger.info(f"PDF generated for student_id {student_id}")
         except Exception as e:
             logging.error(f"Error processing student_id {student_id}: {e}")
     for email_address, file_name in zip(email_addresses, file_names):
         try:
             send_pdf_email(email_address, file_name, service)
-            print(f"Email sent to {email_address}")
+            logger.info(f"Email sent to {email_address}")
         except Exception as e:
             logging.error(f"Error sending email to {email_address}: {e}")
         time.sleep(3)

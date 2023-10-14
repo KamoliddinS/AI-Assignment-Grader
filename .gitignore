@@ -4,3 +4,4 @@
 student_processing.log
 .env
 .idea
+.DS_Store
