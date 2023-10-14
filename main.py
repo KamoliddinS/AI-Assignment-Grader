@@ -123,22 +123,22 @@ def chat_with_gpt(content):
     except Exception as e:
         logger.error(f"Error in chat_with_gpt: {e}")
         raise 
-def get_score_feedback(question, answer):
+def get_score_feedback(question, answer, wait_time=5):
     try:
         content = f"Question: {question} Answer: {answer}"
         output = chat_with_gpt(content)
         output = json.loads(output)
-        time.sleep(10)
+        time.sleep(wait_time)
         logger.info(f"Score and feedback generated for question {question} and answer {answer}")   
         return output['score'], output['feedback']
     except Exception as e:
         logging.error(f"Error getting score feedback for question {question} and answer {answer}: {e}")
         raise  
-def generate_pdf(questions, answers, score_feedback, student_id, sum_score):
+def generate_pdf(questions, answers, score_feedback, student_id, sum_score, total_questions, save_dir="./"):
     
     try:
         # Create a PDF document
-        pdf_filename = f"{student_id}.pdf"
+        pdf_filename =  f"{save_dir}{student_id}.pdf"
         doc = SimpleDocTemplate(pdf_filename, pagesize=letter)
 
         # Create a list to store the content of the PDF
@@ -149,7 +149,7 @@ def generate_pdf(questions, answers, score_feedback, student_id, sum_score):
         
          # Add student ID and Total Score at the beginning
         content.append(Paragraph(f"Student ID: {student_id}", styles["Heading1"]))
-        content.append(Paragraph(f"Total Score: {sum_score}", styles["Heading1"]))
+        content.append(Paragraph(f"Total Score: {sum_score}/{total_questions}", styles["Heading1"]))
         content.append(Spacer(1, 24))  # Add some space after the student details
 
 
@@ -249,7 +249,7 @@ def generate_excel_report(data, score_feedbacks):
     workbook.save(report_path)
     return report_path
 
-def main(file_path):
+def main(file_path, save_dir, wait_time):
     setup_openai_api()
     SCOPES = ['https://www.googleapis.com/auth/gmail.send']
     credentials_json= GMAIL_API_CREDENTIALS   
@@ -258,6 +258,11 @@ def main(file_path):
         flow = InstalledAppFlow.from_client_secrets_file(credentials_json, SCOPES)
         creds = flow.run_local_server(port=0)
     service = build('gmail', 'v1', credentials=creds)
+
+
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+    
     
     data = read_excel_file(file_path)
     questions = [ question for question in data.columns if question not in ["Timestamp", "Email Address", "Student Id ", "Score"]]
@@ -269,16 +274,17 @@ def main(file_path):
         try:
             logger.info(f"Processing student_id {student_id}")
             # check if the student has been processed before by studnet_id in current directory
-            if os.path.exists(f"{student_id}.pdf"):
+            if os.path.exists(f"{save_dir}{student_id}.pdf"):
                 logger.info(f"PDF already generated for student_id {student_id}")
-                logger.info(f"Email is already sent to {email_address}")
             else:
                 student_data = data[data["Student Id "] == student_id]
                 answers = student_data[answers_column].values[0]
-                score_feedback = [get_score_feedback(question, answer) for question, answer in zip(questions, answers)]
+                score_feedback = [get_score_feedback(question, answer, wait_time) for question, answer in zip(questions, answers)]
                 score_feedbacks.append(score_feedback)
                 sum_score = sum([score for score, _ in score_feedback])
-                pdf_filename = generate_pdf(questions, answers, score_feedback, student_id, sum_score)
+                
+                total_questions = len(questions)
+                pdf_filename = generate_pdf(questions, answers, score_feedback, student_id, sum_score, total_questions, save_dir)
                 file_names.append(pdf_filename)
                 logger.info(f"PDF generated for student_id {student_id}")
                 send_pdf_email(email_address, pdf_filename, service)
@@ -296,12 +302,16 @@ def main(file_path):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Grade student assignments using AI.')
     parser.add_argument('file_path', type=str, help='Path to the Excel file with student assignments')
-    parser.add_argument('--log', type=str, help='Path to the log file')
-    parser.add_argument('--time', type=int, help='Time to wait between scoring each question')
-    
+
+      # New argument for directory to save generated PDFs
+    parser.add_argument('--save_dir', type=str, default="./", help='Directory to save generated PDFs')
+
+    # New argument for time to wait between processing each question
+    parser.add_argument('--wait_time', type=float, default=0.0, help='Time (in seconds) to wait between processing each question')
+
     args = parser.parse_args()
-    main(args.file_path)
-    
+
+    main(args.file_path, args.save_dir, args.wait_time)
 
 
 
