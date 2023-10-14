@@ -1,0 +1,6 @@
+*.pdf
+*.xlsx
+*.json
+student_processing.log
+.env
+.idea
