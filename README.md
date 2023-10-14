@@ -56,6 +56,35 @@ OPEN_AI_DEPLOYMENT_ID=YOUR_DEPLOYMENT_ID
 CREDENTIALS_JSON_PATH=YOUR_CREDENTIALS_JSON_PATH
 ```
 
+## Excel File Structure:
+### Description:
+This file can be directly downloaded from Google Forms. It contains the responses of all students who have filled the form.
+
+### File Name: `Assignement.xlsx` 
+
+### Sheet Structure
+
+#### 1. Sheet Name: `Student Responses`
+
+**Columns:**
+
+| Column | Description |
+|--------|-------------|
+| A | Timestamp |
+| B | Email Address |
+| C | Student Id |
+| D | Response to: "What is the basic structure of a C++ program?" |
+| E | Response to: "How are primitive data types used in C++ programming?" |
+| F | Response to: "What is the main difference between arrays and vectors in C++?" |
+| ... | Additional questions and responses ... |
+
+### Instructions for Use
+
+1. **Adding Responses**: When a student completes the form, their responses will be added to the `Student Responses` sheet in the respective columns.
+2. **Viewing Responses**: Open the `cpp_basics_responses.xlsx` file and navigate to the `Student Responses` sheet.
+3. **Backup**: It's recommended to take periodic backups of the Excel file to prevent data loss.
+
+
 ## Contributing:
 
 Contributions are welcome! Please read the contributing guidelines to get started.
