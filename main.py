@@ -278,9 +278,11 @@ def main(file_path):
         time.sleep(3)
         
     # Generate the Excel report for the teacher
-    generate_excel_report(data, score_feedbacks)
-    logger.info("Excel report for the teacher generated successfully.")
-
+    try:
+        generate_excel_report(data, score_feedbacks)
+        logger.info("Excel report for the teacher generated successfully.")
+    except Exception as e:
+        logging.error(f"Error generating Excel report for the teacher: {e}")
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Grade student assignments using AI.')
     parser.add_argument('file_path', type=str, help='Path to the Excel file with student assignments')
