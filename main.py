@@ -14,6 +14,7 @@ from email.mime.text import MIMEText
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+from openpyxl import Workbook
 
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
@@ -204,6 +205,42 @@ def send_pdf_email(email_address, pdf_path, service ):
         logging.error(f"Error sending email to {email_address}: {e}")
         raise
 
+def generate_excel_report(data, score_feedbacks):
+    """
+    Generate an Excel report containing student scores and feedback using score_feedbacks list.
+    """
+    workbook = Workbook()
+    sheet = workbook.active
+    
+    # Create headers for the Excel sheet
+    headers = ["Student Id", "Email", "Question", "Answer", "Score", "Feedback"]
+    for idx, header in enumerate(headers, 1):
+        sheet.cell(row=1, column=idx, value=header)
+    
+    row = 2  # Start from the second row for data
+    
+    for student_data, student_scores_feedbacks in zip(data.iterrows(), score_feedbacks):
+        student_data = student_data[1]
+        student_id = student_data["Student Id "]
+        email = student_data["Email Address"]
+
+        for (question, answer), (score, feedback) in zip(student_scores_feedbacks["qa_pairs"], student_scores_feedbacks["scores_feedbacks"]):
+            
+            # Write the student data to the Excel sheet
+            sheet.cell(row=row, column=1, value=student_id)
+            sheet.cell(row=row, column=2, value=email)
+            sheet.cell(row=row, column=3, value=question)
+            sheet.cell(row=row, column=4, value=answer)
+            sheet.cell(row=row, column=5, value=score)
+            sheet.cell(row=row, column=6, value=feedback)
+            
+            row += 1  # Move to the next row for the next data entry
+    
+    # Save the workbook to a specified path
+    report_path = "teacher_report.xlsx"
+    workbook.save(report_path)
+    return report_path
+
 def main(file_path):
     setup_openai_api()
     SCOPES = ['https://www.googleapis.com/auth/gmail.send']
@@ -219,13 +256,14 @@ def main(file_path):
     answers_column = [column for column in data.columns if column not in ["Timestamp", "Email Address", "Student Id ", "Score"]]
     file_names = []
     email_addresses = data["Email Address"].values
-
+    score_feedbacks = []
     for student_id in data["Student Id "].values:
         try:
             logger.info(f"Processing student_id {student_id}")
             student_data = data[data["Student Id "] == student_id]
             answers = student_data[answers_column].values[0]
             score_feedback = [get_score_feedback(question, answer) for question, answer in zip(questions, answers)]
+            score_feedbacks.append(score_feedback)
             pdf_filename = generate_pdf(questions, answers, score_feedback, student_id)
             file_names.append(pdf_filename)
             logger.info(f"PDF generated for student_id {student_id}")
@@ -238,14 +276,19 @@ def main(file_path):
         except Exception as e:
             logging.error(f"Error sending email to {email_address}: {e}")
         time.sleep(3)
-
+        
+    # Generate the Excel report for the teacher
+    generate_excel_report(data, score_feedbacks)
+    logger.info("Excel report for the teacher generated successfully.")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Grade student assignments using AI.')
     parser.add_argument('file_path', type=str, help='Path to the Excel file with student assignments')
     
+    
     args = parser.parse_args()
     main(args.file_path)
+    
 
 
 
