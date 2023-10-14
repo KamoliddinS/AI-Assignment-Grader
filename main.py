@@ -213,27 +213,33 @@ def send_pdf_email(email_address, pdf_path, service ):
         logging.error(f"Error sending email to {email_address}: {e}")
         raise
 
+
+
+
 def generate_excel_report(data, score_feedbacks):
     """
     Generate an Excel report containing student scores and feedback using score_feedbacks list.
     """
     workbook = Workbook()
     sheet = workbook.active
-    
+
     # Create headers for the Excel sheet
     headers = ["Student Id", "Email", "Question", "Answer", "Score", "Feedback"]
     for idx, header in enumerate(headers, 1):
         sheet.cell(row=1, column=idx, value=header)
-    
+
     row = 2  # Start from the second row for data
-    
-    for student_data, student_scores_feedbacks in zip(data.iterrows(), score_feedbacks):
-        student_data = student_data[1]
+
+    # Extract questions from the dataframe
+    questions = [question for question in data.columns if
+                 question not in ["Timestamp", "Email Address", "Student Id ", "Score"]]
+
+    for idx, student_data in data.iterrows():
         student_id = student_data["Student Id "]
         email = student_data["Email Address"]
+        answers = student_data[questions].values
 
-        for (question, answer), (score, feedback) in zip(student_scores_feedbacks["qa_pairs"], student_scores_feedbacks["scores_feedbacks"]):
-            
+        for (question, answer), (score, feedback) in zip(zip(questions, answers), score_feedbacks[idx]):
             # Write the student data to the Excel sheet
             sheet.cell(row=row, column=1, value=student_id)
             sheet.cell(row=row, column=2, value=email)
@@ -241,13 +247,14 @@ def generate_excel_report(data, score_feedbacks):
             sheet.cell(row=row, column=4, value=answer)
             sheet.cell(row=row, column=5, value=score)
             sheet.cell(row=row, column=6, value=feedback)
-            
+
             row += 1  # Move to the next row for the next data entry
-    
+
     # Save the workbook to a specified path
     report_path = "teacher_report.xlsx"
     workbook.save(report_path)
     return report_path
+
 
 def main(file_path, save_dir, wait_time):
     setup_openai_api()
