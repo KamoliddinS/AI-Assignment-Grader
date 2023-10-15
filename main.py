@@ -138,7 +138,14 @@ def generate_pdf(questions, answers, score_feedback, student_id, sum_score, tota
     
     try:
         # Create a PDF document
-        pdf_filename =  f"{save_dir}{student_id}.pdf"
+        pdf_filename = f"{save_dir}/{student_id}_assignment.pdf"
+        if os.path.exists(pdf_filename):
+            version = 1
+            while os.path.exists(pdf_filename):
+                version += 1
+                pdf_filename = f"{save_dir}/{student_id}_assignment_v{version}.pdf"
+
+
         doc = SimpleDocTemplate(pdf_filename, pagesize=letter)
 
         # Create a list to store the content of the PDF
@@ -149,7 +156,7 @@ def generate_pdf(questions, answers, score_feedback, student_id, sum_score, tota
         
          # Add student ID and Total Score at the beginning
         content.append(Paragraph(f"Student ID: {student_id}", styles["Heading1"]))
-        content.append(Paragraph(f"Total Score: {sum_score}/{total_questions}", styles["Heading1"]))
+        content.append(Paragraph(f"Total Score: {sum_score}/{total_questions*10}", styles["Heading1"]))
         content.append(Spacer(1, 24))  # Add some space after the student details
 
 
@@ -255,6 +262,63 @@ def generate_excel_report(data, score_feedbacks):
     workbook.save(report_path)
     return report_path
 
+def generate_overall_report(data, score_feedbacks):
+    """
+    Generate an Excel report with overall scores, considering additional submissions.
+    """
+    workbook = Workbook()
+    sheet = workbook.active
+    
+    # Create headers for the Excel sheet
+    headers = ["Timestamp", "Student Id", "Email", "Questions Answered", "Total Marks", "Additional Marks (Later Submission)", "Total Score"]
+    for idx, header in enumerate(headers, 1):
+        sheet.cell(row=1, column=idx, value=header)
+    
+    row = 2  # Start from the second row for data
+
+    student_ids = data["Student Id "].unique()
+
+    for student_id in student_ids:
+        student_submissions = data[data["Student Id "] == student_id].sort_values(by="Timestamp")
+        total_marks = 0
+        additional_marks = 0
+
+        for _, student_data in student_submissions.iterrows():
+            idx_feedback = data.index.get_loc(_)
+            if idx_feedback < len(score_feedbacks):  # Check to ensure we don't go out of range
+                student_feedback = score_feedbacks[idx_feedback]
+
+                submission_score = sum([score for score, _ in student_feedback])
+                if total_marks == 0:  # first submission
+                    total_marks += submission_score
+                else:  # later submissions
+                    additional_score = submission_score * 0.5
+                    additional_marks += additional_score
+            else:
+                print(f"No feedback found for student with ID: {student_id}")
+
+        total_score = total_marks + additional_marks
+
+        email = student_data["Email Address"]
+        timestamp = student_data["Timestamp"]
+        questions_answered = len([score for score, _ in score_feedbacks[data.index.get_loc(student_submissions.index[0])]])
+
+        # Write data to the Excel sheet
+        sheet.cell(row=row, column=1, value=timestamp)
+        sheet.cell(row=row, column=2, value=student_id)
+        sheet.cell(row=row, column=3, value=email)
+        sheet.cell(row=row, column=4, value=questions_answered)
+        sheet.cell(row=row, column=5, value=total_marks)
+        sheet.cell(row=row, column=6, value=additional_marks)
+        sheet.cell(row=row, column=7, value=total_score)
+        
+        row += 1  # Move to the next row for the next student
+    
+    # Save the workbook to a specified path
+    report_path = "overall_report.xlsx"
+    workbook.save(report_path)
+    return report_path
+
 
 def main(file_path, save_dir, wait_time):
     setup_openai_api()
@@ -277,25 +341,24 @@ def main(file_path, save_dir, wait_time):
     file_names = []
     email_addresses = data["Email Address"].values
     score_feedbacks = []
+    student_processed = []
     for student_id, email_address in zip(data["Student Id "].values, email_addresses):
         try:
             logger.info(f"Processing student_id {student_id}")
             # check if the student has been processed before by studnet_id in current directory
-            if os.path.exists(f"{save_dir}{student_id}.pdf"):
-                logger.info(f"PDF already generated for student_id {student_id}")
-            else:
-                student_data = data[data["Student Id "] == student_id]
-                answers = student_data[answers_column].values[0]
-                score_feedback = [get_score_feedback(question, answer, wait_time) for question, answer in zip(questions, answers)]
-                score_feedbacks.append(score_feedback)
-                sum_score = sum([score for score, _ in score_feedback])
-                
-                total_questions = len(questions)
-                pdf_filename = generate_pdf(questions, answers, score_feedback, student_id, sum_score, total_questions, save_dir)
-                file_names.append(pdf_filename)
-                logger.info(f"PDF generated for student_id {student_id}")
-                send_pdf_email(email_address, pdf_filename, service)
-                logger.info(f"Email sent to {email_address}")
+            student_data = data[data["Student Id "] == student_id]
+            answers = student_data[answers_column].values[0]
+            score_feedback = [get_score_feedback(question, answer, wait_time) for question, answer in zip(questions, answers)]
+            score_feedbacks.append(score_feedback)
+            sum_score = sum([score for score, _ in score_feedback])
+
+            total_questions = len(questions)
+            pdf_filename = generate_pdf(questions, answers, score_feedback, student_id, sum_score, total_questions, save_dir)
+            file_names.append(pdf_filename)
+            logger.info(f"PDF generated for student_id {student_id}")
+            send_pdf_email(email_address, pdf_filename, service)
+            logger.info(f"Email sent to {email_address}")
+            student_processed.append(student_id)
         except Exception as e:
             logging.error(f"Error sending email to {email_address}: {e}")
         time.sleep(3)
@@ -306,6 +369,12 @@ def main(file_path, save_dir, wait_time):
         logger.info("Excel report for the teacher generated successfully.")
     except Exception as e:
         logging.error(f"Error generating Excel report for the teacher: {e}")
+        
+    try:
+        generate_overall_report(data, score_feedbacks)
+        logger.info("Overall Excel report for the teacher generated successfully.")
+    except Exception as e:
+        logging.error(f"Error generating overall Excel report for the teacher: {e}")
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Grade student assignments using AI.')
     parser.add_argument('file_path', type=str, help='Path to the Excel file with student assignments')
